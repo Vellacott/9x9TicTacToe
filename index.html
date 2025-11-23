@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>9x9 Tic-Tac-Toe</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="setup-screen" id="setup-screen">
+        <h2>Game Setup</h2>
+        <div class="setup-option">
+            <label>Game Mode:</label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="game-mode" value="2player" checked>
+                    <span>Two Players</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="game-mode" value="1player">
+                    <span>vs Computer</span>
+                </label>
+            </div>
+        </div>
+        <div class="setup-option" id="computer-options" style="display: none;">
+            <label>Difficulty:</label>
+            <select id="difficulty">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+            </select>
+        </div>
+        <div class="setup-option" id="player-order-options" style="display: none;">
+            <label>You Play:</label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="player-order" value="first" checked>
+                    <span>First (X)</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="player-order" value="second">
+                    <span>Second (O)</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="player-order" value="random">
+                    <span>Random</span>
+                </label>
+            </div>
+        </div>
+        <div class="setup-buttons">
+            <button class="btn-primary" id="start-btn">Start Game</button>
+            <button class="btn-secondary" id="cancel-btn" style="display: none;">Cancel</button>
+        </div>
+    </div>
+    <div class="container hidden" id="game-container">
+        <h1>9x9 Tic-Tac-Toe</h1>
+        <div class="game-info">
+            <div class="current-player">
+                <span>Current Player: </span>
+                <span id="player-indicator">X</span>
+            </div>
+            <div class="status" id="status">Player X's turn</div>
+            <button id="reset-btn" class="reset-btn">New Game</button>
+        </div>
+        <div class="global-board" id="global-board">
+            <!-- 9 local boards will be generated here -->
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
+

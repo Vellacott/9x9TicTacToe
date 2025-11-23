@@ -1,0 +1,364 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.container {
+    background: white;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 900px;
+    width: 100%;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 2.5em;
+}
+
+.game-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.current-player {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+#player-indicator {
+    color: #667eea;
+    font-size: 1.5em;
+}
+
+.status {
+    font-size: 1.1em;
+    color: #666;
+    flex: 1;
+    text-align: center;
+}
+
+.reset-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: bold;
+    transition: background 0.3s;
+}
+
+.reset-btn:hover {
+    background: #5568d3;
+}
+
+.global-board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 8px;
+    background: #333;
+    padding: 8px;
+    border-radius: 10px;
+}
+
+.local-board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 2px;
+    background: #ddd;
+    padding: 2px;
+    border-radius: 5px;
+    position: relative;
+}
+
+.local-board.won-x {
+    background: rgba(102, 126, 234, 0.3);
+}
+
+.local-board.won-o {
+    background: rgba(118, 75, 162, 0.3);
+}
+
+.local-board.active {
+    box-shadow: 0 0 15px rgba(102, 126, 234, 0.8);
+    border: 3px solid #667eea;
+}
+
+.local-board.inactive {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.cell {
+    background: white;
+    border: none;
+    font-size: 1.5em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    padding: 0;
+}
+
+.cell:hover:not(.occupied) {
+    background: #f0f0f0;
+    transform: scale(1.05);
+}
+
+.cell.occupied {
+    cursor: not-allowed;
+}
+
+.cell.x {
+    color: #667eea;
+}
+
+.cell.o {
+    color: #764ba2;
+}
+
+.winner-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8em;
+    font-weight: bold;
+    border-radius: 5px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.local-board.won-x .cell,
+.local-board.won-o .cell {
+    opacity: 0.4;
+}
+
+.cell.last-move {
+    background: rgba(255, 255, 0, 0.4) !important;
+    animation: highlightMove 1s ease-in-out;
+}
+
+@keyframes highlightMove {
+    0% {
+        background: rgba(255, 255, 0, 0.8);
+    }
+    100% {
+        background: rgba(255, 255, 0, 0.4);
+    }
+}
+
+.winner-overlay.x {
+    color: #667eea;
+}
+
+.winner-overlay.o {
+    color: #764ba2;
+}
+
+.game-over {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.game-over.show {
+    display: flex;
+}
+
+.game-over-content {
+    background: white;
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.game-over-content h2 {
+    font-size: 2.5em;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.game-over-content button {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-top: 20px;
+}
+
+.game-over-content button:hover {
+    background: #5568d3;
+}
+
+.setup-screen {
+    background: white;
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    width: 100%;
+}
+
+.setup-screen h2 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 30px;
+    font-size: 2em;
+}
+
+.setup-option {
+    margin-bottom: 25px;
+}
+
+.setup-option label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+    font-size: 1.1em;
+}
+
+.setup-option .radio-group {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.setup-option input[type="radio"] {
+    margin-right: 5px;
+}
+
+.setup-option .radio-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 15px;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.setup-option .radio-label:hover {
+    background: #f0f0f0;
+}
+
+.setup-option select {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 1em;
+    cursor: pointer;
+}
+
+.setup-option select:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.setup-buttons {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.setup-buttons button {
+    flex: 1;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background: #667eea;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #5568d3;
+}
+
+.btn-secondary {
+    background: #ddd;
+    color: #333;
+}
+
+.btn-secondary:hover {
+    background: #ccc;
+}
+
+.hidden {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .global-board {
+        gap: 4px;
+        padding: 4px;
+    }
+    
+    .local-board {
+        gap: 1px;
+        padding: 1px;
+    }
+    
+    .cell {
+        font-size: 1em;
+    }
+    
+    h1 {
+        font-size: 2em;
+    }
+    
+    .setup-screen {
+        padding: 20px;
+    }
+}
+
