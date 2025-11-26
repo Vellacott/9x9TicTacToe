@@ -80,6 +80,11 @@ h1 {
     background: #333;
     padding: 8px;
     border-radius: 10px;
+    max-width: min(90vw, 600px);
+    width: 100%;
+    margin: 0 auto;
+    aspect-ratio: 1;
+    overflow: hidden; /* prevent glow / borders from pushing outside on small screens */
 }
 
 .local-board {
@@ -102,8 +107,9 @@ h1 {
 }
 
 .local-board.active {
-    box-shadow: 0 0 15px rgba(102, 126, 234, 0.8);
-    border: 3px solid #667eea;
+    box-shadow:
+        0 0 0 3px #667eea inset,   /* inner outline that does NOT change layout */
+        0 0 15px rgba(102, 126, 234, 0.8);
 }
 
 .local-board.inactive {
@@ -339,26 +345,78 @@ h1 {
 }
 
 @media (max-width: 768px) {
+    body {
+        align-items: flex-start;
+        padding: 10px;
+    }
+
+    .container {
+        padding: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        border-radius: 16px;
+    }
+
+    .setup-screen {
+        padding: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        border-radius: 16px;
+    }
+
     .global-board {
         gap: 4px;
         padding: 4px;
+        max-width: 100%;
     }
     
     .local-board {
-        gap: 1px;
-        padding: 1px;
+        gap: 2px;
+        padding: 2px;
     }
     
     .cell {
-        font-size: 1em;
+        font-size: 1.1em;
     }
     
     h1 {
         font-size: 2em;
     }
-    
-    .setup-screen {
-        padding: 20px;
+
+    .winner-overlay {
+        font-size: 5.5em;
+    }
+
+    /* So the highlighted mini-board doesn't visually overlap neighbours on touch devices */
+    .local-board.active {
+        box-shadow:
+            0 0 0 2px #667eea inset,
+            0 0 8px rgba(102, 126, 234, 0.7);
+    }
+
+    /* Disable scale effect on touch to avoid cells overlapping neighbours */
+    .cell:hover:not(.occupied) {
+        transform: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .cell {
+        font-size: 0.9em;
+    }
+
+    .winner-overlay {
+        font-size: 4.5em;
+    }
+
+    .status {
+        font-size: 0.9em;
+    }
+
+    .current-player {
+        font-size: 1em;
+    }
+
+    #player-indicator {
+        font-size: 1.2em;
     }
 }
 
