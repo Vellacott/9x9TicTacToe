@@ -14,12 +14,38 @@
             <div class="radio-group">
                 <label class="radio-label">
                     <input type="radio" name="game-mode" value="2player" checked>
-                    <span>Two Players</span>
+                    <span>Two Players (Local)</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="game-mode" value="online">
+                    <span>Online Multiplayer</span>
                 </label>
                 <label class="radio-label">
                     <input type="radio" name="game-mode" value="1player">
                     <span>vs Computer</span>
                 </label>
+            </div>
+        </div>
+        <div class="setup-option" id="online-options" style="display: none;">
+            <label>Online Action:</label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="online-action" value="create" checked>
+                    <span>Create Game</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="online-action" value="join">
+                    <span>Join Game</span>
+                </label>
+            </div>
+            <div id="join-game-input" style="display: none; margin-top: 15px;">
+                <input type="text" id="game-id-input" placeholder="Enter Game ID" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 1em;">
+            </div>
+            <div id="game-id-display" style="display: none; margin-top: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                <label style="font-size: 0.9em; color: #666;">Game ID:</label>
+                <div style="font-family: monospace; font-size: 1.2em; font-weight: bold; color: #667eea; margin-top: 5px;" id="game-id-text"></div>
+                <button id="copy-link-btn" style="margin-top: 10px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">Copy Game Link</button>
+                <div style="font-size: 0.85em; color: #666; margin-top: 8px;">Waiting for opponent to join...</div>
             </div>
         </div>
         <div class="setup-option" id="computer-options" style="display: none;">
@@ -66,6 +92,33 @@
             <!-- 9 local boards will be generated here -->
         </div>
     </div>
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        
+        // Import config
+        // IMPORTANT: Update databaseURL below to match your actual Firebase Realtime Database URL
+        // Find it in Firebase Console → Realtime Database → Data tab (shown at top of page)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBfvaihunBWyPwrXnlT-WJUnq39JDgFjK4",
+            authDomain: "x9tictactoe.firebaseapp.com",
+            projectId: "x9tictactoe",
+            storageBucket: "x9tictactoe.firebasestorage.app",
+            messagingSenderId: "570996168776",
+            appId: "1:570996168776:web:0b481351bddc391cfee07d",
+            measurementId: "G-60NP2G1VZE",
+            // Update this URL to match your actual database URL from Firebase Console
+            databaseURL: "https://x9tictactoe-default-rtdb.firebaseio.com/"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        
+        // Make database available globally
+        window.firebaseDatabase = database;
+    </script>
     <script src="script.js"></script>
 </body>
 </html>

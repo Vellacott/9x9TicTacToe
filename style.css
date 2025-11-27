@@ -305,6 +305,20 @@ h1 {
     border-color: #667eea;
 }
 
+.setup-option input[type="text"] {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 1em;
+    font-family: monospace;
+}
+
+.setup-option input[type="text"]:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
 .setup-buttons {
     display: flex;
     gap: 15px;

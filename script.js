@@ -1,3 +1,6 @@
+// Firebase imports (will be loaded from CDN)
+let ref, onValue, set, push, remove, get;
+
 class UltimateTicTacToe {
     constructor() {
         this.currentPlayer = 'X';
@@ -6,12 +9,22 @@ class UltimateTicTacToe {
         this.wonBoards = Array(9).fill(null); // 'X', 'O', or null
         this.gameOver = false;
         this.winner = null;
-        this.gameMode = '2player'; // '2player' or '1player'
+        this.gameMode = '2player'; // '2player', '1player', or 'online'
         this.difficulty = 'easy'; // 'easy', 'medium', 'hard'
         this.computerPlayer = null; // 'X' or 'O' or null
         this.humanPlayer = null; // 'X' or 'O' or null
         this.lastMove = null; // { boardIndex, cellIndex }
         this.boardFirstMoves = Array(9).fill(false); // Track if first move made in each board
+        
+        // Online multiplayer state
+        this.gameId = null;
+        this.playerId = null; // 'player1' or 'player2'
+        this.myPlayer = null; // 'X' or 'O'
+        this.opponentPlayer = null; // 'X' or 'O'
+        this.gameRef = null;
+        this.isOnline = false;
+        this.isMyTurn = false;
+        this.isSyncing = false; // Flag to prevent listener from overwriting during sync
         
         this.initSetup();
     }
@@ -29,12 +42,35 @@ class UltimateTicTacToe {
             radio.addEventListener('change', (e) => {
                 const computerOptions = document.getElementById('computer-options');
                 const playerOrderOptions = document.getElementById('player-order-options');
+                const onlineOptions = document.getElementById('online-options');
+                
                 if (e.target.value === '1player') {
                     computerOptions.style.display = 'block';
                     playerOrderOptions.style.display = 'block';
+                    onlineOptions.style.display = 'none';
+                } else if (e.target.value === 'online') {
+                    computerOptions.style.display = 'none';
+                    playerOrderOptions.style.display = 'none';
+                    onlineOptions.style.display = 'block';
                 } else {
                     computerOptions.style.display = 'none';
                     playerOrderOptions.style.display = 'none';
+                    onlineOptions.style.display = 'none';
+                }
+            });
+        });
+        
+        // Online action change handler
+        document.querySelectorAll('input[name="online-action"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const joinInput = document.getElementById('join-game-input');
+                const gameIdDisplay = document.getElementById('game-id-display');
+                if (e.target.value === 'join') {
+                    joinInput.style.display = 'block';
+                    gameIdDisplay.style.display = 'none';
+                } else {
+                    joinInput.style.display = 'none';
+                    gameIdDisplay.style.display = 'none';
                 }
             });
         });
@@ -42,10 +78,40 @@ class UltimateTicTacToe {
         document.getElementById('start-btn').addEventListener('click', () => this.startGame());
     }
     
-    startGame() {
+    async startGame() {
         // Get game mode
         const gameModeRadio = document.querySelector('input[name="game-mode"]:checked');
         this.gameMode = gameModeRadio.value;
+        
+        if (this.gameMode === 'online') {
+            // Initialize Firebase functions
+            if (window.firebaseDatabase) {
+                const { ref: refFn, onValue: onValueFn, set: setFn, push: pushFn, remove: removeFn, get: getFn } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                ref = refFn;
+                onValue = onValueFn;
+                set = setFn;
+                push = pushFn;
+                remove = removeFn;
+                get = getFn;
+            } else {
+                alert('Firebase is not loaded. Please refresh the page.');
+                return;
+            }
+            
+            const onlineAction = document.querySelector('input[name="online-action"]:checked').value;
+            
+            if (onlineAction === 'create') {
+                await this.createOnlineGame();
+            } else {
+                const gameIdInput = document.getElementById('game-id-input').value.trim();
+                if (!gameIdInput) {
+                    alert('Please enter a Game ID');
+                    return;
+                }
+                await this.joinOnlineGame(gameIdInput);
+            }
+            return; // Don't proceed with normal game initialization
+        }
         
         if (this.gameMode === '1player') {
             // Get difficulty
@@ -90,6 +156,491 @@ class UltimateTicTacToe {
         if (this.gameMode === '1player' && this.computerPlayer === 'X') {
             setTimeout(() => this.computerMove(), 300);
         }
+    }
+    
+    async createOnlineGame() {
+        // Generate unique game ID
+        this.gameId = this.generateGameId();
+        this.playerId = 'player1';
+        this.myPlayer = 'X';
+        this.opponentPlayer = 'O';
+        this.isOnline = true;
+        this.isMyTurn = true;
+        
+        // Show game ID to user
+        document.getElementById('game-id-text').textContent = this.gameId;
+        document.getElementById('game-id-display').style.display = 'block';
+        
+        // Update URL with game ID
+        const url = new URL(window.location.href);
+        url.searchParams.set('game', this.gameId);
+        window.history.pushState({}, '', url);
+        
+        // Setup copy link button
+        const copyLinkBtn = document.getElementById('copy-link-btn');
+        if (copyLinkBtn) {
+            copyLinkBtn.onclick = () => {
+                navigator.clipboard.writeText(window.location.href).then(() => {
+                    const originalText = copyLinkBtn.textContent;
+                    copyLinkBtn.textContent = 'Link Copied!';
+                    copyLinkBtn.style.background = '#4caf50';
+                    setTimeout(() => {
+                        copyLinkBtn.textContent = originalText;
+                        copyLinkBtn.style.background = '#667eea';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy link:', err);
+                    alert('Failed to copy link. Please copy the URL manually.');
+                });
+            };
+        }
+        
+        // Create game in Firebase
+        const gameRef = ref(window.firebaseDatabase, `games/${this.gameId}`);
+        this.gameRef = gameRef;
+        
+        const gameData = {
+            player1: {
+                id: this.playerId,
+                player: 'X',
+                connected: true
+            },
+            player2: null,
+            currentPlayer: 'X',
+            activeBoard: null,
+            localBoards: JSON.parse(JSON.stringify(this.localBoards)), // Deep copy
+            wonBoards: JSON.parse(JSON.stringify(this.wonBoards)), // Deep copy
+            gameOver: false,
+            winner: null,
+            lastMove: null,
+            createdAt: Date.now()
+        };
+        
+        try {
+            await set(gameRef, gameData);
+            console.log('Game created successfully:', this.gameId);
+        } catch (error) {
+            console.error('Error creating game:', error);
+            alert(`Failed to create game: ${error.message}\n\nPlease check:\n1. Security rules are set up correctly\n2. Database URL is correct in index.html\n3. Realtime Database is enabled`);
+            document.getElementById('game-id-display').style.display = 'none';
+            return;
+        }
+        
+        // Listen for player2 joining
+        onValue(ref(window.firebaseDatabase, `games/${this.gameId}/player2`), (snapshot) => {
+            if (snapshot.exists() && snapshot.val() && snapshot.val().connected) {
+                // Player 2 joined, start the game
+                this.startOnlineGame();
+            }
+        });
+        
+        // Listen for game state changes
+        this.setupOnlineListeners();
+    }
+    
+    async joinOnlineGame(gameId) {
+        this.gameId = gameId;
+        this.playerId = 'player2';
+        this.myPlayer = 'O';
+        this.opponentPlayer = 'X';
+        this.isOnline = true;
+        this.isMyTurn = false;
+        
+        const gameRef = ref(window.firebaseDatabase, `games/${gameId}`);
+        this.gameRef = gameRef;
+        
+        // Check if game exists
+        const snapshot = await get(gameRef);
+        if (!snapshot.exists()) {
+            alert('Game not found. Please check the Game ID.');
+            return;
+        }
+        
+        const gameData = snapshot.val();
+        
+        // Check if player2 already exists and is connected
+        if (gameData.player2 && gameData.player2.connected) {
+            alert('This game is already full.');
+            return;
+        }
+        
+        // Check if player1 exists
+        if (!gameData.player1 || !gameData.player1.connected) {
+            alert('Game not ready. Player 1 is not connected.');
+            return;
+        }
+        
+        // Join the game
+        try {
+            await set(ref(window.firebaseDatabase, `games/${gameId}/player2`), {
+                id: this.playerId,
+                player: 'O',
+                connected: true
+            });
+            console.log('Joined game successfully:', gameId);
+            
+            // Update URL with game ID
+            const url = new URL(window.location.href);
+            url.searchParams.set('game', gameId);
+            window.history.pushState({}, '', url);
+        } catch (error) {
+            console.error('Error joining game:', error);
+            alert(`Failed to join game: ${error.message}\n\nPlease check:\n1. Security rules are set up correctly\n2. Database URL is correct in index.html\n3. Game ID is correct`);
+            return;
+        }
+        
+        // Start the game
+        this.startOnlineGame();
+        this.setupOnlineListeners();
+    }
+    
+    startOnlineGame() {
+        // Hide setup screen, show game
+        this.setupScreen.classList.add('hidden');
+        this.gameContainer.classList.remove('hidden');
+        
+        // Initialize game
+        this.init();
+        
+        // Load game state from Firebase
+        this.loadGameState().then(() => {
+            // Ensure isMyTurn is set correctly after loading
+            this.isMyTurn = (this.currentPlayer === this.myPlayer && !this.gameOver);
+            this.updateStatus();
+            this.updateActiveBoards();
+        });
+    }
+    
+    setupOnlineListeners() {
+        // Track last processed state to avoid processing the same state twice
+        let lastProcessedState = null;
+        
+        // Listen for game state changes
+        onValue(this.gameRef, (snapshot) => {
+            if (!snapshot.exists()) return;
+            
+            const gameData = snapshot.val();
+            
+            // Create a state signature to detect changes
+            const stateSignature = JSON.stringify({
+                currentPlayer: gameData.currentPlayer,
+                lastMove: gameData.lastMove,
+                gameOver: gameData.gameOver,
+                winner: gameData.winner
+            });
+            
+            // Check if this is the opponent's move
+            // An opponent move means: the lastMove in Firebase is different from what we have locally
+            const newLastMove = gameData.lastMove;
+            const isOpponentMove = newLastMove && 
+                                  (!this.lastMove || 
+                                   newLastMove.boardIndex !== this.lastMove.boardIndex ||
+                                   newLastMove.cellIndex !== this.lastMove.cellIndex);
+            
+            // Also check if currentPlayer changed to opponent (turn switched to them)
+            const newCurrentPlayer = gameData.currentPlayer || 'X';
+            const turnSwitchedToOpponent = newCurrentPlayer === this.opponentPlayer && newCurrentPlayer !== this.currentPlayer;
+            
+            // Check if game over state changed
+            const gameOverChanged = (gameData.gameOver || false) !== this.gameOver;
+            
+            // Skip update if we're syncing our own move (unless it's clearly the opponent's move or game over)
+            if (this.isSyncing && !isOpponentMove && !turnSwitchedToOpponent && !gameOverChanged && lastProcessedState !== null) {
+                return;
+            }
+            
+            // Always update if state changed (to ensure UI is always in sync with Firebase)
+            if (lastProcessedState !== stateSignature) {
+                lastProcessedState = stateSignature;
+                
+                // Update game state from Firebase
+                const oldCurrentPlayer = this.currentPlayer;
+                this.currentPlayer = newCurrentPlayer;
+                
+                // Ensure activeBoard is either null or a valid number (0-8)
+                const activeBoardValue = gameData.activeBoard;
+                this.activeBoard = (activeBoardValue !== null && activeBoardValue !== undefined && !isNaN(activeBoardValue) && activeBoardValue >= 0 && activeBoardValue <= 8) 
+                    ? Number(activeBoardValue) 
+                    : null;
+                
+                // Deep copy arrays to avoid reference issues
+                // Firebase might store arrays as objects, so we need to convert them properly
+                if (gameData.localBoards) {
+                    try {
+                        // Helper function to convert Firebase object to array
+                        const convertToArray = (obj, length) => {
+                            if (Array.isArray(obj)) {
+                                return [...obj];
+                            } else if (obj && typeof obj === 'object') {
+                                // Firebase stores arrays as objects with numeric string keys
+                                const result = Array(length).fill(null);
+                                for (const key in obj) {
+                                    const index = parseInt(key, 10);
+                                    if (!isNaN(index) && index >= 0 && index < length) {
+                                        result[index] = obj[key];
+                                    }
+                                }
+                                return result;
+                            } else {
+                                return Array(length).fill(null);
+                            }
+                        };
+                        
+                        // Convert top-level boards array
+                        const boardsArray = convertToArray(gameData.localBoards, 9);
+                        
+                        // Convert each board's cells array
+                        this.localBoards = boardsArray.map(board => convertToArray(board, 9));
+                        
+                        // Ensure we have exactly 9 boards with 9 cells each, all properly initialized
+                        while (this.localBoards.length < 9) {
+                            this.localBoards.push(Array(9).fill(null));
+                        }
+                        this.localBoards = this.localBoards.slice(0, 9);
+                        this.localBoards = this.localBoards.map(board => {
+                            const arr = Array.isArray(board) ? board : Array(9).fill(null);
+                            // Ensure array has exactly 9 elements, all null or valid values
+                            const normalized = Array(9).fill(null);
+                            for (let i = 0; i < 9 && i < arr.length; i++) {
+                                normalized[i] = (arr[i] === 'X' || arr[i] === 'O') ? arr[i] : null;
+                            }
+                            return normalized;
+                        });
+                        
+                    } catch (error) {
+                        console.error(`[listener] Error processing localBoards:`, error, gameData.localBoards);
+                        // Keep existing boards if there's an error
+                    }
+                }
+                // If no localBoards in Firebase, keep existing boards (expected on initial load)
+                
+                if (gameData.wonBoards) {
+                    // Convert to array if it's an object
+                    if (Array.isArray(gameData.wonBoards)) {
+                        this.wonBoards = [...gameData.wonBoards];
+                    } else if (gameData.wonBoards && typeof gameData.wonBoards === 'object') {
+                        // Convert object to array
+                        const keys = Object.keys(gameData.wonBoards).sort((a, b) => Number(a) - Number(b));
+                        this.wonBoards = keys.map(key => gameData.wonBoards[key]);
+                    }
+                    // Ensure we have exactly 9 elements
+                    while (this.wonBoards.length < 9) {
+                        this.wonBoards.push(null);
+                    }
+                    this.wonBoards = this.wonBoards.slice(0, 9);
+                }
+                
+                this.gameOver = gameData.gameOver || false;
+                this.winner = gameData.winner || null;
+                this.lastMove = gameData.lastMove ? { ...gameData.lastMove } : null;
+                
+                // Check if it's my turn (before updating UI)
+                this.isMyTurn = (this.currentPlayer === this.myPlayer && !this.gameOver);
+                
+                // Update UI
+                this.updateBoardUI();
+                this.updateStatus();
+                this.updateActiveBoards();
+                
+                // Show game over if needed
+                if (this.gameOver && this.winner) {
+                    this.showGameOver(this.winner);
+                } else if (this.gameOver && !this.winner) {
+                    this.showGameOver(null);
+                }
+            }
+        });
+        
+        // Listen for opponent disconnect
+        const opponentKey = this.playerId === 'player1' ? 'player2' : 'player1';
+        onValue(ref(window.firebaseDatabase, `games/${this.gameId}/${opponentKey}/connected`), (snapshot) => {
+            if (snapshot.exists() && snapshot.val() === false) {
+                alert('Your opponent has disconnected.');
+            }
+        });
+    }
+    
+    async loadGameState() {
+        const snapshot = await get(this.gameRef);
+        if (!snapshot.exists()) return;
+        
+        const gameData = snapshot.val();
+        this.currentPlayer = gameData.currentPlayer || 'X';
+        // Ensure activeBoard is either null or a valid number (0-8)
+        const activeBoardValue = gameData.activeBoard;
+        this.activeBoard = (activeBoardValue !== null && activeBoardValue !== undefined && !isNaN(activeBoardValue) && activeBoardValue >= 0 && activeBoardValue <= 8) 
+            ? Number(activeBoardValue) 
+            : null;
+        
+        // Deep copy arrays to avoid reference issues
+        // Firebase might store arrays as objects, so we need to convert them properly
+        if (gameData.localBoards) {
+            try {
+                // Helper function to convert Firebase object to array
+                const convertToArray = (obj, length) => {
+                    if (Array.isArray(obj)) {
+                        return [...obj];
+                    } else if (obj && typeof obj === 'object') {
+                        // Firebase stores arrays as objects with numeric string keys
+                        const result = Array(length).fill(null);
+                        for (const key in obj) {
+                            const index = parseInt(key, 10);
+                            if (!isNaN(index) && index >= 0 && index < length) {
+                                result[index] = obj[key];
+                            }
+                        }
+                        return result;
+                    } else {
+                        return Array(length).fill(null);
+                    }
+                };
+                
+                // Convert top-level boards array
+                const boardsArray = convertToArray(gameData.localBoards, 9);
+                
+                // Convert each board's cells array
+                this.localBoards = boardsArray.map(board => convertToArray(board, 9));
+                
+                // Ensure we have exactly 9 boards with 9 cells each, all properly initialized
+                while (this.localBoards.length < 9) {
+                    this.localBoards.push(Array(9).fill(null));
+                }
+                this.localBoards = this.localBoards.slice(0, 9);
+                this.localBoards = this.localBoards.map(board => {
+                    const arr = Array.isArray(board) ? board : Array(9).fill(null);
+                    // Ensure array has exactly 9 elements, all null or valid values
+                    const normalized = Array(9).fill(null);
+                    for (let i = 0; i < 9 && i < arr.length; i++) {
+                        normalized[i] = (arr[i] === 'X' || arr[i] === 'O') ? arr[i] : null;
+                    }
+                    return normalized;
+                });
+            } catch (error) {
+                console.error(`[loadGameState] Error processing localBoards:`, error);
+            }
+        }
+        
+        if (gameData.wonBoards) {
+            // Convert to array if it's an object
+            if (Array.isArray(gameData.wonBoards)) {
+                this.wonBoards = [...gameData.wonBoards];
+            } else if (gameData.wonBoards && typeof gameData.wonBoards === 'object') {
+                // Convert object to array
+                const keys = Object.keys(gameData.wonBoards).sort((a, b) => Number(a) - Number(b));
+                this.wonBoards = keys.map(key => gameData.wonBoards[key]);
+            }
+            // Ensure we have exactly 9 elements
+            while (this.wonBoards.length < 9) {
+                this.wonBoards.push(null);
+            }
+            this.wonBoards = this.wonBoards.slice(0, 9);
+        }
+        
+        this.gameOver = gameData.gameOver || false;
+        this.winner = gameData.winner || null;
+        this.lastMove = gameData.lastMove ? { ...gameData.lastMove } : null;
+        
+        // Set isMyTurn correctly
+        this.isMyTurn = (this.currentPlayer === this.myPlayer && !this.gameOver);
+        
+        this.updateBoardUI();
+        this.updateStatus();
+        this.updateActiveBoards();
+    }
+    
+    updateBoardUI() {
+        // Check if DOM is ready
+        const globalBoard = document.getElementById('global-board');
+        if (!globalBoard || !globalBoard.children.length) {
+            // DOM not ready yet, skip update
+            return;
+        }
+        
+        // Ensure localBoards is properly structured
+        if (!this.localBoards || !Array.isArray(this.localBoards) || this.localBoards.length !== 9) {
+            return;
+        }
+        
+        // Update all cells based on current game state
+        for (let boardIndex = 0; boardIndex < 9; boardIndex++) {
+            const board = this.localBoards[boardIndex];
+            if (!board || !Array.isArray(board) || board.length !== 9) {
+                continue;
+            }
+            
+            for (let cellIndex = 0; cellIndex < 9; cellIndex++) {
+                const cell = document.querySelector(`[data-board-index="${boardIndex}"][data-cell-index="${cellIndex}"]`);
+                if (!cell) continue;
+                
+                const value = board[cellIndex];
+                if (value === 'X' || value === 'O') {
+                    cell.textContent = value;
+                    cell.classList.add('occupied', value.toLowerCase());
+                    cell.classList.remove(value === 'X' ? 'o' : 'x');
+                } else {
+                    cell.textContent = '';
+                    cell.classList.remove('occupied', 'x', 'o');
+                }
+            }
+            
+            // Update won boards
+            if (this.wonBoards && this.wonBoards[boardIndex]) {
+                this.markBoardWon(boardIndex, this.wonBoards[boardIndex]);
+            }
+        }
+        
+        // Update last move highlight
+        document.querySelectorAll('.last-move').forEach(cell => {
+            cell.classList.remove('last-move');
+        });
+        if (this.lastMove && this.lastMove.boardIndex !== undefined && this.lastMove.cellIndex !== undefined) {
+            const lastCell = document.querySelector(`[data-board-index="${this.lastMove.boardIndex}"][data-cell-index="${this.lastMove.cellIndex}"]`);
+            if (lastCell) {
+                lastCell.classList.add('last-move');
+            }
+        }
+    }
+    
+    async syncGameState() {
+        if (!this.isOnline || !this.gameRef) return;
+        
+        // Get current game data to preserve player info
+        const snapshot = await get(this.gameRef);
+        const currentData = snapshot.exists() ? snapshot.val() : {};
+        
+        // Sanitize localBoards: replace undefined with null (Firebase doesn't allow undefined)
+        const sanitizedLocalBoards = this.localBoards.map(board => {
+            if (!Array.isArray(board)) return Array(9).fill(null);
+            return board.map(cell => (cell === undefined || cell === null) ? null : cell);
+        });
+        
+        // Sanitize wonBoards: replace undefined with null
+        const sanitizedWonBoards = this.wonBoards.map(board => 
+            (board === undefined || board === null) ? null : board
+        );
+        
+        const gameData = {
+            ...currentData,
+            currentPlayer: this.currentPlayer,
+            activeBoard: this.activeBoard === undefined ? null : this.activeBoard,
+            localBoards: sanitizedLocalBoards,
+            wonBoards: sanitizedWonBoards,
+            gameOver: this.gameOver || false,
+            winner: this.winner || null,
+            lastMove: this.lastMove || null
+        };
+        
+        await set(this.gameRef, gameData);
+    }
+    
+    generateGameId() {
+        // Generate a 6-character alphanumeric game ID
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        for (let i = 0; i < 6; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
     }
     
     init() {
@@ -141,13 +692,26 @@ class UltimateTicTacToe {
     handleCellClick(boardIndex, cellIndex) {
         if (this.gameOver) return;
         
+        // Validate board structure
+        if (!this.localBoards || !Array.isArray(this.localBoards) || 
+            !this.localBoards[boardIndex] || !Array.isArray(this.localBoards[boardIndex])) {
+            console.error('Invalid board structure in handleCellClick');
+            return;
+        }
+        
+        // Don't allow clicks if it's not your turn in online mode
+        if (this.isOnline && !this.isMyTurn) {
+            return;
+        }
+        
         // Don't allow human clicks during computer's turn
         if (this.gameMode === '1player' && this.currentPlayer === this.computerPlayer) {
             return;
         }
         
-        // Check if cell is already occupied
-        if (this.localBoards[boardIndex][cellIndex] !== null) {
+        // Check if cell is already occupied (handle both null and undefined)
+        const cellValue = this.localBoards[boardIndex][cellIndex];
+        if (cellValue !== null && cellValue !== undefined) {
             return;
         }
         
@@ -155,7 +719,7 @@ class UltimateTicTacToe {
         const boardWonOrFull = this.wonBoards[boardIndex] !== null || this.isBoardFull(boardIndex);
         
         // Check if this move is allowed
-        if (this.activeBoard !== null) {
+        if (this.activeBoard !== null && this.activeBoard !== undefined) {
             // There's a specific board requirement
             if (boardWonOrFull) {
                 // Special rule: if target board is won/full, can play anywhere
@@ -172,6 +736,19 @@ class UltimateTicTacToe {
     }
     
     makeMove(boardIndex, cellIndex) {
+        // Validate board structure before making move
+        if (!this.localBoards || !Array.isArray(this.localBoards) || 
+            !this.localBoards[boardIndex] || !Array.isArray(this.localBoards[boardIndex])) {
+            console.error('Invalid board structure in makeMove, cannot make move');
+            return;
+        }
+        
+        // Ensure the cell index is valid
+        if (cellIndex < 0 || cellIndex >= 9 || boardIndex < 0 || boardIndex >= 9) {
+            console.error('Invalid cell or board index in makeMove');
+            return;
+        }
+        
         // Remove previous last move highlight
         if (this.lastMove) {
             const prevCell = document.querySelector(`[data-board-index="${this.lastMove.boardIndex}"][data-cell-index="${this.lastMove.cellIndex}"]`);
@@ -210,14 +787,36 @@ class UltimateTicTacToe {
         if (globalWinner) {
             this.gameOver = true;
             this.winner = globalWinner;
-            this.showGameOver(globalWinner);
+            
+            // Sync game over state to Firebase before showing modal
+            if (this.isOnline) {
+                this.syncGameState().then(() => {
+                    this.showGameOver(globalWinner);
+                }).catch(error => {
+                    console.error('Error syncing game over state:', error);
+                    this.showGameOver(globalWinner);
+                });
+            } else {
+                this.showGameOver(globalWinner);
+            }
             return;
         }
         
         // Check if game is a draw (all boards won or full)
         if (this.isGameDraw()) {
             this.gameOver = true;
-            this.showGameOver(null);
+            
+            // Sync game over state to Firebase before showing modal
+            if (this.isOnline) {
+                this.syncGameState().then(() => {
+                    this.showGameOver(null);
+                }).catch(error => {
+                    console.error('Error syncing game over state:', error);
+                    this.showGameOver(null);
+                });
+            } else {
+                this.showGameOver(null);
+            }
             return;
         }
         
@@ -238,6 +837,20 @@ class UltimateTicTacToe {
         // Update UI
         this.updateStatus();
         this.updateActiveBoards();
+        
+        // Sync with Firebase if online
+        if (this.isOnline) {
+            // Update isMyTurn before syncing
+            this.isMyTurn = (this.currentPlayer === this.myPlayer && !this.gameOver);
+            // Set syncing flag and sync
+            this.isSyncing = true;
+            this.syncGameState().then(() => {
+                this.isSyncing = false;
+            }).catch(error => {
+                console.error('Error syncing game state:', error);
+                this.isSyncing = false;
+            });
+        }
         
         // If it's computer's turn, make computer move
         if (this.gameMode === '1player' && !this.gameOver && this.currentPlayer === this.computerPlayer) {
@@ -814,8 +1427,15 @@ class UltimateTicTacToe {
         const playerIndicator = document.getElementById('player-indicator');
         const status = document.getElementById('status');
         
+        if (!playerIndicator || !status) return;
+        
         playerIndicator.textContent = this.currentPlayer;
         playerIndicator.style.color = this.currentPlayer === 'X' ? '#667eea' : '#764ba2';
+        
+        // Recalculate isMyTurn to ensure it's correct (defensive check)
+        if (this.isOnline && this.myPlayer) {
+            this.isMyTurn = (this.currentPlayer === this.myPlayer && !this.gameOver);
+        }
         
         if (this.gameOver) {
             if (this.winner) {
@@ -823,6 +1443,13 @@ class UltimateTicTacToe {
                     status.textContent = 'Computer wins!';
                 } else if (this.gameMode === '1player' && this.winner === this.humanPlayer) {
                     status.textContent = 'You win!';
+                } else if (this.isOnline) {
+                    // Online mode: show personalized messages
+                    if (this.winner === this.myPlayer) {
+                        status.textContent = 'You win!';
+                    } else {
+                        status.textContent = 'You lost!';
+                    }
                 } else {
                     status.textContent = `Player ${this.winner} wins!`;
                 }
@@ -830,10 +1457,24 @@ class UltimateTicTacToe {
                 status.textContent = "It's a draw!";
             }
         } else {
-            if (this.gameMode === '1player' && this.currentPlayer === this.computerPlayer) {
+            if (this.isOnline) {
+                // Show which player you are in online mode
+                const playerInfo = `You are Player ${this.myPlayer}`;
+                if (!this.isMyTurn) {
+                    status.textContent = `${playerInfo} - Waiting for opponent...`;
+                } else {
+                    if (this.activeBoard === null || this.activeBoard === undefined || isNaN(this.activeBoard)) {
+                        status.textContent = `${playerInfo} - Your turn - Play anywhere`;
+                    } else {
+                        const boardRow = Math.floor(this.activeBoard / 3);
+                        const boardCol = this.activeBoard % 3;
+                        status.textContent = `${playerInfo} - Your turn - Play in board (${boardRow + 1}, ${boardCol + 1})`;
+                    }
+                }
+            } else if (this.gameMode === '1player' && this.currentPlayer === this.computerPlayer) {
                 status.textContent = 'Computer is thinking...';
             } else if (this.gameMode === '1player') {
-                if (this.activeBoard === null) {
+                if (this.activeBoard === null || this.activeBoard === undefined || isNaN(this.activeBoard)) {
                     status.textContent = 'Your turn - Play anywhere';
                 } else {
                     const boardRow = Math.floor(this.activeBoard / 3);
@@ -841,7 +1482,7 @@ class UltimateTicTacToe {
                     status.textContent = `Your turn - Play in board (${boardRow + 1}, ${boardCol + 1})`;
                 }
             } else {
-                if (this.activeBoard === null) {
+                if (this.activeBoard === null || this.activeBoard === undefined || isNaN(this.activeBoard)) {
                     status.textContent = `Player ${this.currentPlayer}'s turn - Play anywhere`;
                 } else {
                     const boardRow = Math.floor(this.activeBoard / 3);
@@ -863,8 +1504,9 @@ class UltimateTicTacToe {
                 return;
             }
             
-            // Don't highlight boards during computer's turn
-            if (this.gameMode === '1player' && this.currentPlayer === this.computerPlayer) {
+            // Don't highlight boards during computer's turn or opponent's turn in online
+            if ((this.gameMode === '1player' && this.currentPlayer === this.computerPlayer) ||
+                (this.isOnline && !this.isMyTurn)) {
                 board.classList.add('inactive');
                 return;
             }
@@ -912,6 +1554,13 @@ class UltimateTicTacToe {
                 message.textContent = 'Computer Wins!';
             } else if (this.gameMode === '1player' && winner === this.humanPlayer) {
                 message.textContent = 'You Win!';
+            } else if (this.isOnline) {
+                // Online mode: show personalized messages
+                if (winner === this.myPlayer) {
+                    message.textContent = 'You Win!';
+                } else {
+                    message.textContent = 'You Lost!';
+                }
             } else {
                 message.textContent = `Player ${winner} Wins!`;
             }
@@ -926,7 +1575,34 @@ class UltimateTicTacToe {
         this.updateActiveBoards();
     }
     
-    reset() {
+    async reset() {
+        // Clean up online game if active
+        if (this.isOnline && this.gameRef) {
+            // Mark player as disconnected
+            await set(ref(window.firebaseDatabase, `games/${this.gameId}/${this.playerId}/connected`), false);
+            // Remove game if both players disconnected (or after a delay)
+            setTimeout(async () => {
+                const snapshot = await get(this.gameRef);
+                if (snapshot.exists()) {
+                    const gameData = snapshot.val();
+                    const p1Connected = gameData.player1?.connected || false;
+                    const p2Connected = gameData.player2?.connected || false;
+                    if (!p1Connected && !p2Connected) {
+                        await remove(this.gameRef);
+                    }
+                }
+            }, 5000);
+        }
+        
+        // Reset online state
+        this.isOnline = false;
+        this.gameId = null;
+        this.playerId = null;
+        this.myPlayer = null;
+        this.opponentPlayer = null;
+        this.gameRef = null;
+        this.isMyTurn = false;
+        
         // Show setup screen again
         this.setupScreen.classList.remove('hidden');
         this.gameContainer.classList.add('hidden');
@@ -943,6 +1619,10 @@ class UltimateTicTacToe {
         this.lastMove = null;
         this.boardFirstMoves = Array(9).fill(false);
         
+        // Reset UI elements
+        document.getElementById('game-id-display').style.display = 'none';
+        document.getElementById('game-id-input').value = '';
+        
         // Remove last move highlight
         document.querySelectorAll('.last-move').forEach(cell => {
             cell.classList.remove('last-move');
@@ -957,6 +1637,34 @@ class UltimateTicTacToe {
 }
 
 // Initialize game when page loads
-document.addEventListener('DOMContentLoaded', () => {
-    new UltimateTicTacToe();
+document.addEventListener('DOMContentLoaded', async () => {
+    const game = new UltimateTicTacToe();
+    
+    // Check for game ID in URL and auto-join if present
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameId = urlParams.get('game');
+    if (gameId) {
+        // Wait a bit for UI to be ready
+        setTimeout(() => {
+            // Set online mode and join the game
+            const gameModeRadio = document.querySelector('input[name="game-mode"][value="online"]');
+            const joinRadio = document.querySelector('input[name="online-action"][value="join"]');
+            if (gameModeRadio && joinRadio) {
+                gameModeRadio.checked = true;
+                joinRadio.checked = true;
+                // Trigger the change event to show the join input
+                gameModeRadio.dispatchEvent(new Event('change'));
+                joinRadio.dispatchEvent(new Event('change'));
+                
+                // Set the game ID in the input
+                const gameIdInput = document.getElementById('game-id-input');
+                if (gameIdInput) {
+                    gameIdInput.value = gameId;
+                }
+                
+                // Auto-start the game
+                game.startGame();
+            }
+        }, 200);
+    }
 });
