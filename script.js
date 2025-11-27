@@ -419,9 +419,17 @@ class UltimateTicTacToe {
                     if (Array.isArray(gameData.wonBoards)) {
                         this.wonBoards = [...gameData.wonBoards];
                     } else if (gameData.wonBoards && typeof gameData.wonBoards === 'object') {
-                        // Convert object to array
-                        const keys = Object.keys(gameData.wonBoards).sort((a, b) => Number(a) - Number(b));
-                        this.wonBoards = keys.map(key => gameData.wonBoards[key]);
+                        // Convert object to array - CRITICAL: preserve index positions
+                        // Firebase stores sparse arrays as objects like {"4": "O"}, we need to put "O" at index 4
+                        this.wonBoards = Array(9).fill(null);
+                        for (const key in gameData.wonBoards) {
+                            const index = parseInt(key, 10);
+                            if (!isNaN(index) && index >= 0 && index < 9) {
+                                this.wonBoards[index] = gameData.wonBoards[key];
+                            }
+                        }
+                    } else {
+                        this.wonBoards = Array(9).fill(null);
                     }
                     // Ensure we have exactly 9 elements
                     while (this.wonBoards.length < 9) {
@@ -526,9 +534,17 @@ class UltimateTicTacToe {
             if (Array.isArray(gameData.wonBoards)) {
                 this.wonBoards = [...gameData.wonBoards];
             } else if (gameData.wonBoards && typeof gameData.wonBoards === 'object') {
-                // Convert object to array
-                const keys = Object.keys(gameData.wonBoards).sort((a, b) => Number(a) - Number(b));
-                this.wonBoards = keys.map(key => gameData.wonBoards[key]);
+                // Convert object to array - CRITICAL: preserve index positions
+                // Firebase stores sparse arrays as objects like {"4": "O"}, we need to put "O" at index 4
+                this.wonBoards = Array(9).fill(null);
+                for (const key in gameData.wonBoards) {
+                    const index = parseInt(key, 10);
+                    if (!isNaN(index) && index >= 0 && index < 9) {
+                        this.wonBoards[index] = gameData.wonBoards[key];
+                    }
+                }
+            } else {
+                this.wonBoards = Array(9).fill(null);
             }
             // Ensure we have exactly 9 elements
             while (this.wonBoards.length < 9) {
