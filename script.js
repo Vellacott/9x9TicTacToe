@@ -428,6 +428,7 @@ class UltimateTicTacToe {
                         this.wonBoards.push(null);
                     }
                     this.wonBoards = this.wonBoards.slice(0, 9);
+                    console.log(`[listener] Received wonBoards from Firebase:`, JSON.stringify(this.wonBoards));
                 }
                 
                 this.gameOver = gameData.gameOver || false;
@@ -630,7 +631,9 @@ class UltimateTicTacToe {
             lastMove: this.lastMove || null
         };
         
+        console.log(`[syncGameState] Syncing state: currentPlayer=${this.currentPlayer}, lastMove=`, this.lastMove, `wonBoards=`, JSON.stringify(sanitizedWonBoards));
         await set(this.gameRef, gameData);
+        console.log(`[syncGameState] Sync complete`);
     }
     
     generateGameId() {
@@ -687,6 +690,67 @@ class UltimateTicTacToe {
     
     attachEventListeners() {
         document.getElementById('reset-btn').addEventListener('click', () => this.reset());
+        
+        // Debug panel
+        const debugBtn = document.getElementById('debug-btn');
+        const debugPanel = document.getElementById('debug-panel');
+        const copyStateBtn = document.getElementById('copy-state-btn');
+        
+        if (debugBtn && debugPanel) {
+            debugBtn.addEventListener('click', () => {
+                const isVisible = debugPanel.style.display !== 'none';
+                debugPanel.style.display = isVisible ? 'none' : 'block';
+                if (!isVisible) {
+                    this.updateDebugPanel();
+                }
+            });
+        }
+        
+        if (copyStateBtn) {
+            copyStateBtn.addEventListener('click', () => {
+                const state = this.getGameStateJSON();
+                navigator.clipboard.writeText(state).then(() => {
+                    const originalText = copyStateBtn.textContent;
+                    copyStateBtn.textContent = 'Copied!';
+                    setTimeout(() => {
+                        copyStateBtn.textContent = originalText;
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy state:', err);
+                    alert('Failed to copy. Check console for state.');
+                });
+            });
+        }
+    }
+    
+    getGameStateJSON() {
+        const state = {
+            timestamp: new Date().toISOString(),
+            gameMode: this.gameMode,
+            isOnline: this.isOnline,
+            gameId: this.gameId,
+            playerId: this.playerId,
+            myPlayer: this.myPlayer,
+            opponentPlayer: this.opponentPlayer,
+            currentPlayer: this.currentPlayer,
+            isMyTurn: this.isMyTurn,
+            activeBoard: this.activeBoard,
+            gameOver: this.gameOver,
+            winner: this.winner,
+            lastMove: this.lastMove,
+            localBoards: this.localBoards,
+            wonBoards: this.wonBoards,
+            boardFirstMoves: this.boardFirstMoves
+        };
+        return JSON.stringify(state, null, 2);
+    }
+    
+    updateDebugPanel() {
+        const debugContent = document.getElementById('debug-content');
+        if (!debugContent) return;
+        
+        const state = this.getGameStateJSON();
+        debugContent.textContent = state;
     }
     
     handleCellClick(boardIndex, cellIndex) {
@@ -778,8 +842,10 @@ class UltimateTicTacToe {
         // Check for local board win
         const localWinner = this.checkLocalBoardWin(boardIndex);
         if (localWinner) {
+            console.log(`[makeMove] Board ${boardIndex} won by ${localWinner}. Move: board=${boardIndex}, cell=${cellIndex}, player=${this.currentPlayer}`);
             this.wonBoards[boardIndex] = localWinner;
             this.markBoardWon(boardIndex, localWinner);
+            console.log(`[makeMove] wonBoards after win:`, JSON.stringify(this.wonBoards));
         }
         
         // Check for global board win
@@ -1407,13 +1473,20 @@ class UltimateTicTacToe {
     }
     
     markBoardWon(boardIndex, winner) {
+        console.log(`[markBoardWon] Marking board ${boardIndex} as won by ${winner}`);
         const localBoard = document.querySelector(`.local-board[data-board-index="${boardIndex}"]`);
+        if (!localBoard) {
+            console.error(`[markBoardWon] Board element not found for index ${boardIndex}`);
+            return;
+        }
         localBoard.classList.add(`won-${winner.toLowerCase()}`);
         
         const overlay = localBoard.querySelector('.winner-overlay');
-        overlay.textContent = winner;
-        overlay.classList.add(winner.toLowerCase());
-        overlay.style.display = 'flex';
+        if (overlay) {
+            overlay.textContent = winner;
+            overlay.classList.add(winner.toLowerCase());
+            overlay.style.display = 'flex';
+        }
         
         // Disable all cells in this board
         const cells = localBoard.querySelectorAll('.cell');
@@ -1421,6 +1494,7 @@ class UltimateTicTacToe {
             cell.classList.add('occupied');
             cell.style.pointerEvents = 'none';
         });
+        console.log(`[markBoardWon] Board ${boardIndex} marked as won by ${winner}, disabled ${cells.length} cells`);
     }
     
     updateStatus() {
