@@ -34,6 +34,7 @@ class UltimateTicTacToe {
         this.timerInterval = null; // Interval ID for timer updates
         this.timerStartTime = null; // When current player's timer started
         this.lastTimerSync = null; // Last time timer was synced to Firebase
+        this.firstMoveMade = false; // Track if first move has been made (timer should only start after first move)
         
         this.initSetup();
     }
@@ -153,6 +154,7 @@ class UltimateTicTacToe {
         this.winner = null;
         this.lastMove = null;
         this.boardFirstMoves = Array(9).fill(false);
+        this.firstMoveMade = false; // Reset first move flag
         
         // Initialize timer
         const timerRadio = document.querySelector('input[name="timer"]:checked');
@@ -466,6 +468,11 @@ class UltimateTicTacToe {
                 this.winner = gameData.winner || null;
                 this.lastMove = gameData.lastMove ? { ...gameData.lastMove } : null;
                 
+                // Check if first move has been made (if there's a lastMove, first move was made)
+                if (this.lastMove !== null) {
+                    this.firstMoveMade = true;
+                }
+                
                 // Load timer state from Firebase
                 if (gameData.timerType && gameData.timerType !== 'none') {
                     this.timerType = gameData.timerType;
@@ -486,12 +493,22 @@ class UltimateTicTacToe {
                 this.isMyTurn = (this.currentPlayer === this.myPlayer && !this.gameOver);
                 
                 // Restart timer if current player changed or timer isn't running
-                if (!this.gameOver && this.timerType !== 'none') {
-                    if (oldCurrentPlayer !== this.currentPlayer || !this.timerInterval) {
+                // BUT only if first move has been made and it's actually my turn
+                if (!this.gameOver && this.timerType !== 'none' && this.firstMoveMade) {
+                    // Only start timer if it's my turn
+                    if (this.currentPlayer === this.myPlayer) {
+                        if (oldCurrentPlayer !== this.currentPlayer || !this.timerInterval) {
+                            this.stopTimer();
+                            this.startTimer();
+                        }
+                    } else {
+                        // It's not my turn, make sure timer is stopped
                         this.stopTimer();
-                        this.startTimer();
                     }
                 } else if (this.gameOver) {
+                    this.stopTimer();
+                } else if (!this.firstMoveMade) {
+                    // First move hasn't been made yet, don't start timer
                     this.stopTimer();
                 }
                 
@@ -629,9 +646,15 @@ class UltimateTicTacToe {
         // Initialize timer if needed
         if (this.timerType !== 'none') {
             this.updateTimerDisplay();
-            if (!this.gameOver) {
+            // Only start timer if first move has been made and it's my turn
+            if (!this.gameOver && this.firstMoveMade && this.currentPlayer === this.myPlayer) {
                 this.startTimer();
             }
+        }
+        
+        // Check if first move has been made (if there's a lastMove, first move was made)
+        if (this.lastMove !== null) {
+            this.firstMoveMade = true;
         }
         
         this.updateBoardUI();
@@ -1003,6 +1026,9 @@ class UltimateTicTacToe {
             this.activeBoard = null;
         }
         
+        // Mark that first move has been made
+        this.firstMoveMade = true;
+        
         // Handle timer: stop current player's timer and add increment
         const playerWhoJustMoved = this.currentPlayer; // Save before switching
         this.stopTimer();
@@ -1011,8 +1037,10 @@ class UltimateTicTacToe {
         // Switch player
         this.currentPlayer = this.currentPlayer === 'X' ? 'O' : 'X';
         
-        // Start timer for new current player
-        this.startTimer();
+        // Start timer for new current player (only if timer is enabled and first move was made)
+        if (this.timerType !== 'none' && this.firstMoveMade) {
+            this.startTimer();
+        }
         
         // Update UI
         this.updateStatus();
@@ -1747,12 +1775,19 @@ class UltimateTicTacToe {
         // Update display
         this.updateTimerDisplay();
         
-        // Start timer for current player
-        this.startTimer();
+        // DO NOT start timer here - timer should only start after first move is made
+        // The timer will be started in makeMove() after the first move
     }
     
     startTimer() {
         if (this.timerType === 'none' || this.gameOver) return;
+        
+        // Only start timer if it's actually the current player's turn
+        // This prevents the timer from running when it's not your turn
+        if (this.isOnline && this.currentPlayer !== this.myPlayer) {
+            // It's not my turn, don't start the timer
+            return;
+        }
         
         // Stop any existing timer first
         this.stopTimer();
@@ -1786,6 +1821,14 @@ class UltimateTicTacToe {
     
     updateTimer() {
         if (this.timerType === 'none' || this.gameOver || !this.timerStartTime) return;
+        
+        // In online mode, only update timer if it's actually my turn
+        // This prevents the timer from counting down when it's not your turn
+        if (this.isOnline && this.currentPlayer !== this.myPlayer) {
+            // It's not my turn, stop the timer
+            this.stopTimer();
+            return;
+        }
         
         const elapsed = Date.now() - this.timerStartTime;
         let remaining;
