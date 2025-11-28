@@ -8,71 +8,146 @@
 </head>
 <body>
     <div class="setup-screen" id="setup-screen">
-        <h2>Game Setup</h2>
-        <div class="setup-option">
-            <label>Game Mode:</label>
-            <div class="radio-group">
-                <label class="radio-label">
-                    <input type="radio" name="game-mode" value="2player" checked>
-                    <span>Two Players (Local)</span>
-                </label>
-                <label class="radio-label">
-                    <input type="radio" name="game-mode" value="online">
-                    <span>Online Multiplayer</span>
-                </label>
-                <label class="radio-label">
-                    <input type="radio" name="game-mode" value="1player">
-                    <span>vs Computer</span>
-                </label>
+        <div class="setup-header">
+            <h2>Game Setup</h2>
+            <p class="setup-subtitle">Choose your game mode and settings</p>
+        </div>
+        
+        <div class="setup-content">
+            <div class="setup-card">
+                <div class="setup-card-header">
+                    <h3>Game Mode</h3>
+                </div>
+                <div class="setup-card-body">
+                    <div class="radio-group-grid">
+                        <label class="radio-card">
+                            <input type="radio" name="game-mode" value="2player" checked>
+                            <div class="radio-card-content">
+                                <span class="radio-card-title">Two Players</span>
+                                <span class="radio-card-subtitle">Local play</span>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="game-mode" value="online">
+                            <div class="radio-card-content">
+                                <span class="radio-card-title">Online</span>
+                                <span class="radio-card-subtitle">Play with friends</span>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="game-mode" value="1player">
+                            <div class="radio-card-content">
+                                <span class="radio-card-title">vs Computer</span>
+                                <span class="radio-card-subtitle">Practice mode</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="setup-card" id="online-options" style="display: none;">
+                <div class="setup-card-header">
+                    <h3>Online Options</h3>
+                </div>
+                <div class="setup-card-body">
+                    <div class="radio-group-inline">
+                        <label class="radio-button">
+                            <input type="radio" name="online-action" value="create" checked>
+                            <span>Create Game</span>
+                        </label>
+                        <label class="radio-button">
+                            <input type="radio" name="online-action" value="join">
+                            <span>Join Game</span>
+                        </label>
+                    </div>
+                    <div id="join-game-input" style="display: none; margin-top: 15px;">
+                        <input type="text" id="game-id-input" class="input-field" placeholder="Enter Game ID">
+                    </div>
+                    <div id="game-id-display" style="display: none; margin-top: 15px;">
+                        <div class="game-id-box">
+                            <div class="game-id-label">Game ID</div>
+                            <div class="game-id-value" id="game-id-text"></div>
+                            <button id="copy-link-btn" class="btn-copy">Copy Game Link</button>
+                            <div class="game-id-status">Waiting for opponent to join...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="setup-card" id="computer-options" style="display: none;">
+                <div class="setup-card-header">
+                    <h3>Difficulty</h3>
+                </div>
+                <div class="setup-card-body">
+                    <select id="difficulty" class="select-field">
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="setup-card" id="player-order-options" style="display: none;">
+                <div class="setup-card-header">
+                    <h3>You Play As</h3>
+                </div>
+                <div class="setup-card-body">
+                    <div class="radio-group-inline">
+                        <label class="radio-button">
+                            <input type="radio" name="player-order" value="first" checked>
+                            <span>First (X)</span>
+                        </label>
+                        <label class="radio-button">
+                            <input type="radio" name="player-order" value="second">
+                            <span>Second (O)</span>
+                        </label>
+                        <label class="radio-button">
+                            <input type="radio" name="player-order" value="random">
+                            <span>Random</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="setup-card" id="timer-options">
+                <div class="setup-card-header">
+                    <h3>Time Control</h3>
+                </div>
+                <div class="setup-card-body">
+                    <div class="radio-group-grid">
+                        <label class="radio-card">
+                            <input type="radio" name="timer" value="none" checked>
+                            <div class="radio-card-content">
+                                <span class="radio-card-title">No Timer</span>
+                                <span class="radio-card-subtitle">Unlimited time</span>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="timer" value="rapid">
+                            <div class="radio-card-content">
+                                <span class="radio-card-title">Rapid</span>
+                                <span class="radio-card-subtitle">5min + 5s</span>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="timer" value="blitz">
+                            <div class="radio-card-content">
+                                <span class="radio-card-title">Blitz</span>
+                                <span class="radio-card-subtitle">3min + 2s</span>
+                            </div>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="timer" value="bullet">
+                            <div class="radio-card-content">
+                                <span class="radio-card-title">Bullet</span>
+                                <span class="radio-card-subtitle">2min + 1s</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="setup-option" id="online-options" style="display: none;">
-            <label>Online Action:</label>
-            <div class="radio-group">
-                <label class="radio-label">
-                    <input type="radio" name="online-action" value="create" checked>
-                    <span>Create Game</span>
-                </label>
-                <label class="radio-label">
-                    <input type="radio" name="online-action" value="join">
-                    <span>Join Game</span>
-                </label>
-            </div>
-            <div id="join-game-input" style="display: none; margin-top: 15px;">
-                <input type="text" id="game-id-input" placeholder="Enter Game ID" style="width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 1em;">
-            </div>
-            <div id="game-id-display" style="display: none; margin-top: 15px; padding: 10px; background: #f0f0f0; border-radius: 8px;">
-                <label style="font-size: 0.9em; color: #666;">Game ID:</label>
-                <div style="font-family: monospace; font-size: 1.2em; font-weight: bold; color: #667eea; margin-top: 5px;" id="game-id-text"></div>
-                <button id="copy-link-btn" style="margin-top: 10px; padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em;">Copy Game Link</button>
-                <div style="font-size: 0.85em; color: #666; margin-top: 8px;">Waiting for opponent to join...</div>
-            </div>
-        </div>
-        <div class="setup-option" id="computer-options" style="display: none;">
-            <label>Difficulty:</label>
-            <select id="difficulty">
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-            </select>
-        </div>
-        <div class="setup-option" id="player-order-options" style="display: none;">
-            <label>You Play:</label>
-            <div class="radio-group">
-                <label class="radio-label">
-                    <input type="radio" name="player-order" value="first" checked>
-                    <span>First (X)</span>
-                </label>
-                <label class="radio-label">
-                    <input type="radio" name="player-order" value="second">
-                    <span>Second (O)</span>
-                </label>
-                <label class="radio-label">
-                    <input type="radio" name="player-order" value="random">
-                    <span>Random</span>
-                </label>
-            </div>
-        </div>
+
         <div class="setup-buttons">
             <button class="btn-primary" id="start-btn">Start Game</button>
             <button class="btn-secondary" id="cancel-btn" style="display: none;">Cancel</button>
@@ -86,6 +161,18 @@
                 <span id="player-indicator">X</span>
             </div>
             <div class="status" id="status">Player X's turn</div>
+            <div id="timer-display" style="display: none; margin: 10px 0;">
+                <div style="display: flex; gap: 20px; justify-content: center;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 0.85em; color: #666; margin-bottom: 5px;">Player X</div>
+                        <div id="timer-x" style="font-size: 1.5em; font-weight: bold; font-family: monospace; color: #667eea;">10:00</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 0.85em; color: #666; margin-bottom: 5px;">Player O</div>
+                        <div id="timer-o" style="font-size: 1.5em; font-weight: bold; font-family: monospace; color: #764ba2;">10:00</div>
+                    </div>
+                </div>
+            </div>
             <button id="reset-btn" class="reset-btn">New Game</button>
             <button id="debug-btn" class="reset-btn" style="margin-left: 10px; background: #666;">Debug Info</button>
         </div>

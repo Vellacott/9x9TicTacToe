@@ -26,6 +26,15 @@ class UltimateTicTacToe {
         this.isMyTurn = false;
         this.isSyncing = false; // Flag to prevent listener from overwriting during sync
         
+        // Timer state
+        this.timerType = 'none'; // 'none', 'rapid', 'bullet'
+        this.timerX = 0; // Time remaining for player X in milliseconds
+        this.timerO = 0; // Time remaining for player O in milliseconds
+        this.timerIncrement = 0; // Increment per move in milliseconds
+        this.timerInterval = null; // Interval ID for timer updates
+        this.timerStartTime = null; // When current player's timer started
+        this.lastTimerSync = null; // Last time timer was synced to Firebase
+        
         this.initSetup();
     }
     
@@ -145,6 +154,11 @@ class UltimateTicTacToe {
         this.lastMove = null;
         this.boardFirstMoves = Array(9).fill(false);
         
+        // Initialize timer
+        const timerRadio = document.querySelector('input[name="timer"]:checked');
+        this.timerType = timerRadio ? timerRadio.value : 'none';
+        this.initializeTimer();
+        
         // Hide setup screen, show game
         this.setupScreen.classList.add('hidden');
         this.gameContainer.classList.remove('hidden');
@@ -199,6 +213,11 @@ class UltimateTicTacToe {
         const gameRef = ref(window.firebaseDatabase, `games/${this.gameId}`);
         this.gameRef = gameRef;
         
+        // Initialize timer before creating game
+        const timerRadio = document.querySelector('input[name="timer"]:checked');
+        this.timerType = timerRadio ? timerRadio.value : 'none';
+        this.initializeTimer();
+        
         const gameData = {
             player1: {
                 id: this.playerId,
@@ -213,6 +232,10 @@ class UltimateTicTacToe {
             gameOver: false,
             winner: null,
             lastMove: null,
+            timerType: this.timerType,
+            timerX: this.timerType !== 'none' ? this.timerX : null,
+            timerO: this.timerType !== 'none' ? this.timerO : null,
+            timerIncrement: this.timerType !== 'none' ? this.timerIncrement : null,
             createdAt: Date.now()
         };
         
@@ -443,13 +466,40 @@ class UltimateTicTacToe {
                 this.winner = gameData.winner || null;
                 this.lastMove = gameData.lastMove ? { ...gameData.lastMove } : null;
                 
+                // Load timer state from Firebase
+                if (gameData.timerType && gameData.timerType !== 'none') {
+                    this.timerType = gameData.timerType;
+                    if (gameData.timerX !== null && gameData.timerX !== undefined) {
+                        this.timerX = gameData.timerX;
+                    }
+                    if (gameData.timerO !== null && gameData.timerO !== undefined) {
+                        this.timerO = gameData.timerO;
+                    }
+                    if (gameData.timerIncrement !== null && gameData.timerIncrement !== undefined) {
+                        this.timerIncrement = gameData.timerIncrement;
+                    }
+                    // Show timer display
+                    document.getElementById('timer-display').style.display = 'block';
+                }
+                
                 // Check if it's my turn (before updating UI)
                 this.isMyTurn = (this.currentPlayer === this.myPlayer && !this.gameOver);
+                
+                // Restart timer if current player changed or timer isn't running
+                if (!this.gameOver && this.timerType !== 'none') {
+                    if (oldCurrentPlayer !== this.currentPlayer || !this.timerInterval) {
+                        this.stopTimer();
+                        this.startTimer();
+                    }
+                } else if (this.gameOver) {
+                    this.stopTimer();
+                }
                 
                 // Update UI
                 this.updateBoardUI();
                 this.updateStatus();
                 this.updateActiveBoards();
+                this.updateTimerDisplay();
                 
                 // Show game over if needed
                 if (this.gameOver && this.winner) {
@@ -557,8 +607,32 @@ class UltimateTicTacToe {
         this.winner = gameData.winner || null;
         this.lastMove = gameData.lastMove ? { ...gameData.lastMove } : null;
         
+        // Load timer state from Firebase
+        if (gameData.timerType && gameData.timerType !== 'none') {
+            this.timerType = gameData.timerType;
+            if (gameData.timerX !== null && gameData.timerX !== undefined) {
+                this.timerX = gameData.timerX;
+            }
+            if (gameData.timerO !== null && gameData.timerO !== undefined) {
+                this.timerO = gameData.timerO;
+            }
+            if (gameData.timerIncrement !== null && gameData.timerIncrement !== undefined) {
+                this.timerIncrement = gameData.timerIncrement;
+            }
+            // Show timer display
+            document.getElementById('timer-display').style.display = 'block';
+        }
+        
         // Set isMyTurn correctly
         this.isMyTurn = (this.currentPlayer === this.myPlayer && !this.gameOver);
+        
+        // Initialize timer if needed
+        if (this.timerType !== 'none') {
+            this.updateTimerDisplay();
+            if (!this.gameOver) {
+                this.startTimer();
+            }
+        }
         
         this.updateBoardUI();
         this.updateStatus();
@@ -636,6 +710,18 @@ class UltimateTicTacToe {
             (board === undefined || board === null) ? null : board
         );
         
+        // Calculate current timer values (accounting for elapsed time if timer is running)
+        let timerX = this.timerX;
+        let timerO = this.timerO;
+        if (this.timerStartTime && this.timerType !== 'none' && !this.gameOver) {
+            const elapsed = Date.now() - this.timerStartTime;
+            if (this.currentPlayer === 'X') {
+                timerX = Math.max(0, this.timerX - elapsed);
+            } else {
+                timerO = Math.max(0, this.timerO - elapsed);
+            }
+        }
+        
         const gameData = {
             ...currentData,
             currentPlayer: this.currentPlayer,
@@ -644,7 +730,11 @@ class UltimateTicTacToe {
             wonBoards: sanitizedWonBoards,
             gameOver: this.gameOver || false,
             winner: this.winner || null,
-            lastMove: this.lastMove || null
+            lastMove: this.lastMove || null,
+            timerType: this.timerType,
+            timerX: this.timerType !== 'none' ? timerX : null,
+            timerO: this.timerType !== 'none' ? timerO : null,
+            timerIncrement: this.timerType !== 'none' ? this.timerIncrement : null
         };
         
         console.log(`[syncGameState] Syncing state: currentPlayer=${this.currentPlayer}, lastMove=`, this.lastMove, `wonBoards=`, JSON.stringify(sanitizedWonBoards));
@@ -913,8 +1003,16 @@ class UltimateTicTacToe {
             this.activeBoard = null;
         }
         
+        // Handle timer: stop current player's timer and add increment
+        const playerWhoJustMoved = this.currentPlayer; // Save before switching
+        this.stopTimer();
+        this.addTimerIncrement(playerWhoJustMoved);
+        
         // Switch player
         this.currentPlayer = this.currentPlayer === 'X' ? 'O' : 'X';
+        
+        // Start timer for new current player
+        this.startTimer();
         
         // Update UI
         this.updateStatus();
@@ -1619,7 +1717,203 @@ class UltimateTicTacToe {
         });
     }
     
+    initializeTimer() {
+        // Stop any existing timer
+        this.stopTimer();
+        
+        if (this.timerType === 'none') {
+            document.getElementById('timer-display').style.display = 'none';
+            return;
+        }
+        
+        // Show timer display
+        document.getElementById('timer-display').style.display = 'block';
+        
+        // Set initial time and increment based on timer type
+        if (this.timerType === 'rapid') {
+            this.timerX = 5 * 60 * 1000; // 5 minutes in milliseconds
+            this.timerO = 5 * 60 * 1000;
+            this.timerIncrement = 5 * 1000; // 5 seconds
+        } else if (this.timerType === 'blitz') {
+            this.timerX = 3 * 60 * 1000; // 3 minutes in milliseconds
+            this.timerO = 3 * 60 * 1000;
+            this.timerIncrement = 2 * 1000; // 2 seconds
+        } else if (this.timerType === 'bullet') {
+            this.timerX = 2 * 60 * 1000; // 2 minutes in milliseconds
+            this.timerO = 2 * 60 * 1000;
+            this.timerIncrement = 1 * 1000; // 1 second
+        }
+        
+        // Update display
+        this.updateTimerDisplay();
+        
+        // Start timer for current player
+        this.startTimer();
+    }
+    
+    startTimer() {
+        if (this.timerType === 'none' || this.gameOver) return;
+        
+        // Stop any existing timer first
+        this.stopTimer();
+        
+        // Record start time
+        this.timerStartTime = Date.now();
+        
+        // Start update interval
+        this.timerInterval = setInterval(() => {
+            this.updateTimer();
+        }, 100); // Update every 100ms for smooth countdown
+    }
+    
+    stopTimer() {
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+        }
+        
+        // Save elapsed time if timer was running
+        if (this.timerStartTime && this.timerType !== 'none') {
+            const elapsed = Date.now() - this.timerStartTime;
+            if (this.currentPlayer === 'X') {
+                this.timerX = Math.max(0, this.timerX - elapsed);
+            } else {
+                this.timerO = Math.max(0, this.timerO - elapsed);
+            }
+            this.timerStartTime = null;
+        }
+    }
+    
+    updateTimer() {
+        if (this.timerType === 'none' || this.gameOver || !this.timerStartTime) return;
+        
+        const elapsed = Date.now() - this.timerStartTime;
+        let remaining;
+        
+        if (this.currentPlayer === 'X') {
+            remaining = Math.max(0, this.timerX - elapsed);
+        } else {
+            remaining = Math.max(0, this.timerO - elapsed);
+        }
+        
+        // Check if time ran out
+        if (remaining === 0) {
+            // Update stored values before handling timeout
+            if (this.currentPlayer === 'X') {
+                this.timerX = 0;
+            } else {
+                this.timerO = 0;
+            }
+            this.handleTimeOut();
+            return;
+        }
+        
+        // Update display (don't modify stored values here - they're updated in stopTimer)
+        this.updateTimerDisplay();
+        
+        // Sync to Firebase if online (throttled)
+        if (this.isOnline) {
+            this.syncTimerState();
+        }
+    }
+    
+    updateTimerDisplay() {
+        if (this.timerType === 'none') return;
+        
+        const formatTime = (ms) => {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        };
+        
+        // Get current time (accounting for elapsed time if timer is running)
+        let timeX = this.timerX;
+        let timeO = this.timerO;
+        
+        if (this.timerStartTime && !this.gameOver) {
+            const elapsed = Date.now() - this.timerStartTime;
+            if (this.currentPlayer === 'X') {
+                timeX = Math.max(0, this.timerX - elapsed);
+            } else {
+                timeO = Math.max(0, this.timerO - elapsed);
+            }
+        }
+        
+        const timerXEl = document.getElementById('timer-x');
+        const timerOEl = document.getElementById('timer-o');
+        
+        if (timerXEl) {
+            timerXEl.textContent = formatTime(timeX);
+            // Highlight active timer
+            if (this.currentPlayer === 'X' && !this.gameOver) {
+                timerXEl.style.color = '#ff4444'; // Red when active
+            } else {
+                timerXEl.style.color = '#667eea'; // Blue when inactive
+            }
+        }
+        
+        if (timerOEl) {
+            timerOEl.textContent = formatTime(timeO);
+            // Highlight active timer
+            if (this.currentPlayer === 'O' && !this.gameOver) {
+                timerOEl.style.color = '#ff4444'; // Red when active
+            } else {
+                timerOEl.style.color = '#764ba2'; // Purple when inactive
+            }
+        }
+    }
+    
+    handleTimeOut() {
+        if (this.gameOver) return;
+        
+        this.stopTimer();
+        this.gameOver = true;
+        
+        // The player who ran out of time loses
+        this.winner = this.currentPlayer === 'X' ? 'O' : 'X';
+        
+        // Sync to Firebase if online
+        if (this.isOnline) {
+            this.syncGameState();
+        }
+        
+        // Show game over
+        this.showGameOver(this.winner);
+        this.updateStatus();
+    }
+    
+    addTimerIncrement(player) {
+        if (this.timerType === 'none' || this.gameOver) return;
+        
+        // Add increment to the player who just moved
+        if (player === 'X') {
+            this.timerX += this.timerIncrement;
+        } else if (player === 'O') {
+            this.timerO += this.timerIncrement;
+        }
+        
+        this.updateTimerDisplay();
+    }
+    
+    syncTimerState() {
+        // Sync timer state to Firebase (throttled to avoid too many updates)
+        if (!this.isOnline || !this.gameRef || this.timerType === 'none') return;
+        
+        // Only sync every second to avoid too many Firebase writes
+        if (!this.lastTimerSync || Date.now() - this.lastTimerSync > 1000) {
+            this.lastTimerSync = Date.now();
+            // Sync timer state (async, don't wait)
+            this.syncGameState().catch(error => {
+                console.error('Error syncing timer state:', error);
+            });
+        }
+    }
+    
     showGameOver(winner) {
+        // Stop timer when game ends
+        this.stopTimer();
+        
         // Create game over modal if it doesn't exist
         let modal = document.querySelector('.game-over');
         if (!modal) {
@@ -1708,6 +2002,14 @@ class UltimateTicTacToe {
         this.humanPlayer = null;
         this.lastMove = null;
         this.boardFirstMoves = Array(9).fill(false);
+        
+        // Reset timer
+        this.stopTimer();
+        this.timerType = 'none';
+        this.timerX = 0;
+        this.timerO = 0;
+        this.timerIncrement = 0;
+        document.getElementById('timer-display').style.display = 'none';
         
         // Reset UI elements
         document.getElementById('game-id-display').style.display = 'none';
